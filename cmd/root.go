@@ -10,12 +10,7 @@ import (
 )
 
 var (
-	token       string
-	username    string
-	packageName string
-	yes         bool
-	debug       bool
-	minRetain   int
+	debug bool
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -41,7 +36,7 @@ func Execute() {
 }
 
 func init() {
-	// rootCmd.Flags().StringVar(&up, "up", os.Getenv("GITHUB_TOKEN"), "github token, defaults to env variable GITHUB_TOKEN")
+	rootCmd.Flags().BoolVar(&debug, "debug", false, "if enabled, print dagger logs")
 }
 
 func buildx() error {
@@ -52,14 +47,23 @@ func buildx() error {
 		return err
 	}
 
+	debugFlag := "-s"
+	if debug {
+		debugFlag = ""
+	}
+
 	cmd := exec.CommandContext(ctx, dagger, []string{
 		"call",
+		debugFlag,
 		"-m=github.com/rajatjindal/daggerverse/wasi@main",
 		"build",
 		"--source=.",
 		"export",
 		"--path=.",
 	}...)
+
+	// DO NOT SEND TRACES TO DAGGER CLOUD
+	cmd.Env = append(cmd.Environ(), "DAGGER_NO_NAG=1", "SHUTUP=1")
 
 	return run(cmd)
 }
