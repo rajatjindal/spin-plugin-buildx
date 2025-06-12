@@ -9,9 +9,15 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var (
-	debug bool
-)
+type buildFlagsType struct {
+	up           bool
+	componentIds []string
+	from         string
+	help         bool
+	debug        bool
+}
+
+var buildFlags = buildFlagsType{}
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
@@ -36,7 +42,11 @@ func Execute() {
 }
 
 func init() {
-	rootCmd.Flags().BoolVar(&debug, "debug", false, "if enabled, print dagger logs")
+	rootCmd.Flags().BoolVar(&buildFlags.debug, "debug", false, "if enabled, print dagger logs")
+
+	rootCmd.Flags().BoolVarP(&buildFlags.up, "up", "u", false, "Run the application after building")
+	rootCmd.Flags().StringSliceVarP(&buildFlags.componentIds, "component-id", "c", nil, "Component ID to build. This can be specified multiple times. The default is all components")
+	rootCmd.Flags().StringVarP(&buildFlags.from, "from", "f", "", "The application to build. This may be a manifest (spin.toml) file, or a directory containing a spin.toml file. If omitted, it defaults to \"spin.toml\"")
 }
 
 func buildx() error {
@@ -47,20 +57,33 @@ func buildx() error {
 		return err
 	}
 
-	debugFlag := "-s"
-	if debug {
-		debugFlag = ""
+	args := []string{"call"}
+	if !buildFlags.debug {
+		args = append(args, "-s")
 	}
 
-	cmd := exec.CommandContext(ctx, dagger, []string{
-		"call",
-		debugFlag,
+	args = append(args, []string{
 		"-m=github.com/rajatjindal/daggerverse/wasi@main",
 		"build",
 		"--source=.",
-		"export",
-		"--path=.",
 	}...)
+
+	if buildFlags.up {
+		args = append(args, []string{
+			"as-service",
+			"--args=spin,up,--listen=0.0.0.0:3000",
+			"up",
+		}...)
+	} else {
+		args = append(args, []string{
+			"directory",
+			"--path=/app",
+			"export",
+			"--path=.",
+		}...)
+	}
+
+	cmd := exec.CommandContext(ctx, dagger, args...)
 
 	// DO NOT SEND TRACES TO DAGGER CLOUD
 	cmd.Env = append(cmd.Environ(), "DAGGER_NO_NAG=1", "SHUTUP=1")
