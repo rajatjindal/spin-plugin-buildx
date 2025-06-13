@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -60,22 +61,26 @@ func buildx() error {
 	args := []string{"call"}
 	if !buildFlags.debug {
 		args = append(args, "-s")
+	} else {
+		// open terminal when build in container fails
+		args = append(args, "-i")
 	}
-
-	args = append(args, []string{
-		"-m=github.com/rajatjindal/daggerverse/wasi@main",
-		"build",
-		"--source=.",
-	}...)
 
 	if buildFlags.up {
 		args = append(args, []string{
-			"as-service",
-			"--args=spin,up,--listen=0.0.0.0:3000",
+			"-m=github.com/rajatjindal/daggerverse/wasi@main",
+			// "-m=../../rajatjindal/daggerverse/wasi",
+			"up",
+			"--source=.",
+			fmt.Sprintf("--args=%q", strings.Join([]string{"--build"}, ",")),
 			"up",
 		}...)
 	} else {
 		args = append(args, []string{
+			"-m=github.com/rajatjindal/daggerverse/wasi@main",
+			// "-m=../../rajatjindal/daggerverse/wasi",
+			"build",
+			"--source=.",
 			"directory",
 			"--path=/app",
 			"export",
@@ -86,7 +91,9 @@ func buildx() error {
 	cmd := exec.CommandContext(ctx, dagger, args...)
 
 	// DO NOT SEND TRACES TO DAGGER CLOUD
-	cmd.Env = append(cmd.Environ(), "DAGGER_NO_NAG=1", "SHUTUP=1")
+	// Setting XDG_CONFIG_HOME is just a hack, otherwise dagger
+	// sends the traces to the cloud.
+	cmd.Env = append(os.Environ(), "DAGGER_NO_NAG=1", "DO_NOT_TRACK=1", "XDG_CONFIG_HOME=/foo")
 
 	return run(cmd)
 }
